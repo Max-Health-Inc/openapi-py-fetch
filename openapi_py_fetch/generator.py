@@ -384,6 +384,7 @@ def generate_client_package(
     output_dir: Path,
     *,
     enrich_tags_fn: Any | None = None,
+    tags: list[str] | None = None,
 ) -> bool:
     """Generate the complete openapi_client package from an OpenAPI spec.
 
@@ -397,6 +398,8 @@ def generate_client_package(
                     (the ``openapi_client`` package will be created inside it).
         enrich_tags_fn: Optional custom tag-enrichment function.  Defaults to
                         the built-in :func:`enrich_spec_tags`.
+        tags: Optional list of tags to generate.  If ``None``, all tags are
+              generated.
 
     Returns:
         ``True`` if generation + verification succeeded.
@@ -427,6 +430,12 @@ def generate_client_package(
         )
 
     operations_by_tag = extract_operations(spec)
+
+    # Apply tag filter
+    if tags:
+        operations_by_tag = {
+            tag: ops for tag, ops in operations_by_tag.items() if tag in tags
+        }
 
     print(f"   Found {len(operations_by_tag)} API tag(s):")
     for tag, ops in sorted(operations_by_tag.items()):

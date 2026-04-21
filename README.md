@@ -32,6 +32,15 @@ pip install openapi-py-fetch
 # Generate client from local spec
 openapi-py-fetch openapi.json ./generated_openapi
 
+# Generate from URL
+openapi-py-fetch https://petstore.swagger.io/v2/swagger.json ./generated_openapi
+
+# Generate only specific tags
+openapi-py-fetch openapi.json ./generated_openapi --tags pet,store
+
+# Dry run — validate and preview without writing files
+openapi-py-fetch openapi.json --dry-run
+
 # Check version
 openapi-py-fetch --version
 ```

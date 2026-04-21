@@ -1,6 +1,6 @@
 [project]
 name = "openapi-py-fetch"
-version = "0.1.0"
+version = "0.2.0"
 description = "Lightweight Python OpenAPI 3.x client generator and runtime. Zero Java, zero npm."
 authors = [
     {name = "Maximilian Nussbaumer", email = "max.nussbaumer@maxhealth.tech"}

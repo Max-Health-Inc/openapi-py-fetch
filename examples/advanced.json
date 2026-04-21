@@ -1,0 +1,175 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Advanced API",
+    "description": "Spec with advanced OpenAPI features",
+    "version": "2.0.0-beta1"
+  },
+  "paths": {
+    "/employees": {
+      "get": {
+        "tags": ["employees"],
+        "operationId": "listEmployees",
+        "summary": "List all employees",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {"type": "integer"},
+            "description": "Max results"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"type": "object"}
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["employees"],
+        "operationId": "createEmployee",
+        "summary": "Create employee",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"},
+                  "email": {"type": "string", "format": "email"},
+                  "age": {"type": "integer", "nullable": true}
+                },
+                "required": ["name", "email"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {"description": "Created"}
+        }
+      }
+    },
+    "/employees/{employeeId}": {
+      "get": {
+        "tags": ["employees"],
+        "operationId": "getEmployee",
+        "summary": "Get employee by ID",
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"}
+          },
+          {
+            "name": "X-Request-Id",
+            "in": "header",
+            "schema": {"type": "string"},
+            "description": "Correlation ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {"type": "object"}
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["employees"],
+        "operationId": "deleteEmployee",
+        "summary": "Delete employee",
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "204": {"description": "Deleted"}
+        }
+      }
+    },
+    "/departments": {
+      "get": {
+        "tags": ["departments"],
+        "operationId": "listDepartments",
+        "summary": "List departments",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"type": "object"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "summary": "Health check endpoint",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {"type": "object"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/123-special": {
+      "get": {
+        "operationId": "get-item-123-special!",
+        "summary": "Edge-case operationId with special chars",
+        "responses": {
+          "200": {"description": "OK"}
+        }
+      }
+    },
+    "/no-op-id": {
+      "post": {
+        "tags": ["misc"],
+        "summary": "Operation without operationId",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {"type": "object"}
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "OK"}
+        }
+      }
+    }
+  }
+}
