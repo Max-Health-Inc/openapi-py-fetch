@@ -1,24 +1,65 @@
 name: Publish to PyPI
 
+# The version in pyproject.toml is the trigger: bump it, merge to main, and this
+# tags, releases and publishes. A push whose version is already tagged is a no-op,
+# so ordinary merges cost one cheap job.
+#
+# Keep this file named publish.yml: PyPI trusted publishing is bound to the
+# workflow filename, and renaming it makes PyPI reject the upload.
+
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      released: ${{ steps.read.outputs.released }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Read version and check whether it is already released
+        id: read
+        run: |
+          version="$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
+          if [ -z "$version" ]; then
+            echo "::error::Could not read version from pyproject.toml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "v$version is already tagged, nothing to publish." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            echo "v$version is new, publishing once the tests pass." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   test:
     uses: ./.github/workflows/_test.yml
 
   publish:
-    needs: test
+    needs: [version, test]
+    if: needs.version.outputs.released == 'false'
     runs-on: ubuntu-latest
     environment: pypi
 
     permissions:
+      contents: write
       id-token: write
-      contents: read
 
     steps:
       - uses: actions/checkout@v7
@@ -30,5 +71,18 @@ jobs:
       - name: Build
         run: uv build
 
+      # PyPI first: it is the irreversible step, and the tag is the record that it
+      # happened. skip-existing keeps a retry from failing on an upload that landed.
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+      - name: Tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ needs.version.outputs.version }}" \
+            --title "v${{ needs.version.outputs.version }}" \
+            --target "${{ github.sha }}" \
+            --generate-notes
