@@ -316,9 +316,7 @@ def generate_api_class(
     for op in operations:
         methods_code += generate_method(op) + "\n"
 
-    content = f'''# coding: utf-8
-
-"""
+    content = f'''"""
     {api_title}
 
     {api_description}
@@ -422,7 +420,7 @@ def generate_client_package(
 
     discovered = _enrich(spec)
     if discovered:
-        print(f"   \U0001f3f7\ufe0f  Auto-discovered {len(discovered)} undeclared tag(s): {', '.join(discovered)}")
+        print(f"   [tags] Auto-discovered {len(discovered)} undeclared tag(s): {', '.join(discovered)}")
 
     operations_by_tag = extract_operations(spec)
 
@@ -491,7 +489,7 @@ dependencies = ["openapi-py-fetch>=0.1"]
     (output_dir / "pyproject.toml").write_text(pyproject, encoding="utf-8")
 
     total_methods = sum(len(ops) for ops in operations_by_tag.values())
-    print(f"   \u2705 Generated {len(api_classes)} API classes ({total_methods} methods)")
+    print(f"   [ok] Generated {len(api_classes)} API classes ({total_methods} methods)")
 
     return _verify_package(output_dir)
 
@@ -518,7 +516,7 @@ def _verify_package(output_dir: Path) -> bool:
         ]
 
         if not api_classes:
-            print("   \u26a0\ufe0f  Verification: no Api classes found")
+            print("   [warn] Verification: no Api classes found")
             return False
 
         _cls_name, cls = api_classes[0]
@@ -531,10 +529,10 @@ def _verify_package(output_dir: Path) -> bool:
             sig = inspect.signature(getattr(cls, methods[0]))
             doc = inspect.getdoc(getattr(cls, methods[0]))
             if sig and doc:
-                print("   \u2705 Introspection verified (signatures + docstrings OK)")
+                print("   [ok] Introspection verified (signatures + docstrings OK)")
 
         return True
 
     except Exception as e:
-        print(f"   \u26a0\ufe0f  Verification failed: {e}")
+        print(f"   [warn] Verification failed: {e}")
         return False

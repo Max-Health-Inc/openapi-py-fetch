@@ -20,12 +20,12 @@ def _load_spec(source: str) -> dict | None:
             with urllib.request.urlopen(source, timeout=30) as resp:  # noqa: S310
                 return json.loads(resp.read().decode("utf-8"))
         except Exception as exc:
-            print(f"\u274c Failed to fetch spec from URL: {exc}")
+            print(f"[ERROR] Failed to fetch spec from URL: {exc}")
             return None
 
     spec_path = Path(source)
     if not spec_path.exists():
-        print(f"\u274c Spec not found: {spec_path}")
+        print(f"[ERROR] Spec not found: {spec_path}")
         return None
 
     with open(spec_path, encoding="utf-8") as f:
@@ -79,7 +79,7 @@ def main() -> int:
     errors = _validate_spec(spec)
     if errors:
         for err in errors:
-            print(f"\u274c {err}")
+            print(f"[ERROR] {err}")
         return 1
 
     info = spec.get("info", {})
@@ -98,7 +98,7 @@ def main() -> int:
             print(f"  {tag}: {len(tag_ops)} operations")
             for op in tag_ops:
                 print(f"    {op['method']:6s} {op['path']}  ({op['operation_id']})")
-        print("\n\u2705 Dry run complete — no files written.")
+        print("\n[ok] Dry run complete, no files written.")
         return 0
 
     output_dir = Path(args.output)
