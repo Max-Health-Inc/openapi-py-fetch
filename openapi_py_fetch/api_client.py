@@ -1,5 +1,3 @@
-# coding: utf-8
-
 """API client module — makes real HTTP requests via httpx."""
 
 from __future__ import annotations

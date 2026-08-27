@@ -51,9 +51,7 @@ def main() -> int:
         prog="openapi-py-fetch",
         description="Generate Python API clients from OpenAPI 3.x specs.",
     )
-    parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {__version__}"
-    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("spec", help="Path or URL to OpenAPI 3.x JSON spec")
     parser.add_argument(
         "output",

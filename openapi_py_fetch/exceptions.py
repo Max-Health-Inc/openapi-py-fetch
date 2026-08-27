@@ -1,5 +1,3 @@
-# coding: utf-8
-
 """Exception classes for OpenAPI client."""
 
 from __future__ import annotations

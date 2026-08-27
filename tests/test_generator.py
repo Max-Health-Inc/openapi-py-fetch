@@ -1,4 +1,3 @@
-# coding: utf-8
 """Tests for openapi_py_fetch.generator — naming helpers, operation extraction, code generation."""
 
 from __future__ import annotations
@@ -244,7 +243,13 @@ class TestGenerateMethod:
             "summary": "Find pet by ID",
             "description": "",
             "parameters": [
-                {"name": "petId", "in": "path", "required": True, "schema": {"type": "integer"}, "description": "ID of pet"},
+                {
+                    "name": "petId",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "integer"},
+                    "description": "ID of pet",
+                },
             ],
             "body_schema": None,
             "body_required": False,
@@ -285,7 +290,13 @@ class TestGenerateMethod:
                 method="GET",
                 path="/pet/findByStatus",
                 parameters=[
-                    {"name": "status", "in": "query", "required": False, "schema": {"type": "string"}, "description": "Status"},
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "required": False,
+                        "schema": {"type": "string"},
+                        "description": "Status",
+                    },
                 ],
             )
         )
@@ -297,7 +308,7 @@ class TestGenerateMethod:
 
     def test_call_api_invoked(self):
         code = generate_method(self._make_op())
-        assert 'self.api_client.call_api(' in code
+        assert "self.api_client.call_api(" in code
         assert '"/pet/{petId}"' in code
 
 
@@ -321,9 +332,7 @@ class TestGenerateApiClass:
                 "response": {},
             },
         ]
-        class_name, module_name, content = generate_api_class(
-            "store", ops, "Petstore", "A Petstore"
-        )
+        class_name, module_name, content = generate_api_class("store", ops, "Petstore", "A Petstore")
         assert class_name == "StoreApi"
         assert module_name == "store_api"
         assert "class StoreApi:" in content
@@ -387,6 +396,7 @@ class TestGenerateClientPackage:
                     del sys.modules[mod]
 
             import openapi_client
+
             assert hasattr(openapi_client, "PetApi")
             assert hasattr(openapi_client, "StoreApi")
         finally:
@@ -402,6 +412,7 @@ class TestGenerateClientPackage:
                     del sys.modules[mod]
 
             from openapi_client.api.pet_api import PetApi
+
             pet = PetApi()
 
             # Method exists and is callable
@@ -504,20 +515,24 @@ class TestCLI:
 
     def test_valid_spec(self, tmp_path, monkeypatch):
         spec_path = tmp_path / "spec.json"
-        spec_path.write_text(json.dumps({
-            "openapi": "3.0.3",
-            "info": {"title": "Test", "version": "1.0.0"},
-            "tags": [{"name": "default"}],
-            "paths": {
-                "/test": {
-                    "get": {
-                        "tags": ["default"],
-                        "operationId": "getTest",
-                        "responses": {"200": {"description": "OK"}},
-                    }
+        spec_path.write_text(
+            json.dumps(
+                {
+                    "openapi": "3.0.3",
+                    "info": {"title": "Test", "version": "1.0.0"},
+                    "tags": [{"name": "default"}],
+                    "paths": {
+                        "/test": {
+                            "get": {
+                                "tags": ["default"],
+                                "operationId": "getTest",
+                                "responses": {"200": {"description": "OK"}},
+                            }
+                        }
+                    },
                 }
-            },
-        }))
+            )
+        )
         out = tmp_path / "out"
         monkeypatch.setattr(
             "sys.argv",
@@ -531,19 +546,23 @@ class TestCLI:
 
     def test_dry_run(self, tmp_path, monkeypatch, capsys):
         spec_path = tmp_path / "spec.json"
-        spec_path.write_text(json.dumps({
-            "openapi": "3.0.3",
-            "info": {"title": "DryTest", "version": "1.0.0"},
-            "paths": {
-                "/items": {
-                    "get": {
-                        "tags": ["items"],
-                        "operationId": "listItems",
-                        "responses": {"200": {"description": "OK"}},
-                    }
+        spec_path.write_text(
+            json.dumps(
+                {
+                    "openapi": "3.0.3",
+                    "info": {"title": "DryTest", "version": "1.0.0"},
+                    "paths": {
+                        "/items": {
+                            "get": {
+                                "tags": ["items"],
+                                "operationId": "listItems",
+                                "responses": {"200": {"description": "OK"}},
+                            }
+                        }
+                    },
                 }
-            },
-        }))
+            )
+        )
         monkeypatch.setattr(
             "sys.argv",
             ["openapi-py-fetch", str(spec_path), "--dry-run"],
@@ -559,14 +578,26 @@ class TestCLI:
 
     def test_tags_filter(self, tmp_path, monkeypatch):
         spec_path = tmp_path / "spec.json"
-        spec_path.write_text(json.dumps({
-            "openapi": "3.0.3",
-            "info": {"title": "TagTest", "version": "1.0.0"},
-            "paths": {
-                "/a": {"get": {"tags": ["alpha"], "operationId": "opA", "responses": {"200": {"description": "OK"}}}},
-                "/b": {"get": {"tags": ["beta"], "operationId": "opB", "responses": {"200": {"description": "OK"}}}},
-            },
-        }))
+        spec_path.write_text(
+            json.dumps(
+                {
+                    "openapi": "3.0.3",
+                    "info": {"title": "TagTest", "version": "1.0.0"},
+                    "paths": {
+                        "/a": {
+                            "get": {
+                                "tags": ["alpha"],
+                                "operationId": "opA",
+                                "responses": {"200": {"description": "OK"}},
+                            }
+                        },
+                        "/b": {
+                            "get": {"tags": ["beta"], "operationId": "opB", "responses": {"200": {"description": "OK"}}}
+                        },
+                    },
+                }
+            )
+        )
         out = tmp_path / "out"
         monkeypatch.setattr(
             "sys.argv",
@@ -660,7 +691,9 @@ class TestEdgeCases:
                         "requestBody": {
                             "content": {
                                 "multipart/form-data": {"schema": {"type": "object"}},
-                                "application/json": {"schema": {"type": "object", "properties": {"name": {"type": "string"}}}},
+                                "application/json": {
+                                    "schema": {"type": "object", "properties": {"name": {"type": "string"}}}
+                                },
                             }
                         },
                         "responses": {"200": {"description": "OK"}},

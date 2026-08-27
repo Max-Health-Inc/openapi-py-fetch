@@ -1,5 +1,3 @@
-# coding: utf-8
-
 """API response wrapper."""
 
 from __future__ import annotations

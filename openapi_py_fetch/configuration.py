@@ -1,5 +1,3 @@
-# coding: utf-8
-
 """Configuration module for OpenAPI clients."""
 
 from __future__ import annotations

@@ -1,5 +1,3 @@
-# coding: utf-8
-
 """
 openapi-py-fetch — Lightweight Python OpenAPI 3.x client runtime and generator.
 

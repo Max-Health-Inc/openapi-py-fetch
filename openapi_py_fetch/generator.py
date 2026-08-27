@@ -13,13 +13,11 @@ The generated classes have proper:
 
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import sys
 from pathlib import Path
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # Naming helpers
@@ -424,18 +422,13 @@ def generate_client_package(
 
     discovered = _enrich(spec)
     if discovered:
-        print(
-            f"   \U0001f3f7\ufe0f  Auto-discovered {len(discovered)} "
-            f"undeclared tag(s): {', '.join(discovered)}"
-        )
+        print(f"   \U0001f3f7\ufe0f  Auto-discovered {len(discovered)} undeclared tag(s): {', '.join(discovered)}")
 
     operations_by_tag = extract_operations(spec)
 
     # Apply tag filter
     if tags:
-        operations_by_tag = {
-            tag: ops for tag, ops in operations_by_tag.items() if tag in tags
-        }
+        operations_by_tag = {tag: ops for tag, ops in operations_by_tag.items() if tag in tags}
 
     print(f"   Found {len(operations_by_tag)} API tag(s):")
     for tag, ops in sorted(operations_by_tag.items()):
@@ -444,9 +437,7 @@ def generate_client_package(
     # Generate API classes
     api_classes: list[tuple[str, str]] = []
     for tag, operations in sorted(operations_by_tag.items()):
-        class_name, module_name, content = generate_api_class(
-            tag, operations, api_title, api_description
-        )
+        class_name, module_name, content = generate_api_class(tag, operations, api_title, api_description)
         api_classes.append((class_name, module_name))
         filepath = api_dir / f"{module_name}.py"
         filepath.write_text(content, encoding="utf-8")
@@ -454,9 +445,7 @@ def generate_client_package(
     # API __init__.py
     api_init_lines = ["# flake8: noqa\n", "# import apis into api package\n"]
     for class_name, module_name in sorted(api_classes):
-        api_init_lines.append(
-            f"from openapi_client.api.{module_name} import {class_name}\n"
-        )
+        api_init_lines.append(f"from openapi_client.api.{module_name} import {class_name}\n")
     (api_dir / "__init__.py").write_text("".join(api_init_lines), encoding="utf-8")
 
     # Models __init__.py (stub — no model classes generated)
@@ -484,9 +473,7 @@ def generate_client_package(
         "# API classes\n",
     ]
     for class_name, module_name in sorted(api_classes):
-        init_lines.append(
-            f"from openapi_client.api.{module_name} import {class_name}  # noqa: F401\n"
-        )
+        init_lines.append(f"from openapi_client.api.{module_name} import {class_name}  # noqa: F401\n")
     (client_dir / "__init__.py").write_text("".join(init_lines), encoding="utf-8")
 
     # pyproject.toml — depends on openapi-py-fetch, NOT httpx directly
@@ -527,9 +514,7 @@ def _verify_package(output_dir: Path) -> bool:
         api_classes = [
             (name, getattr(openapi_client, name))
             for name in dir(openapi_client)
-            if name.endswith("Api")
-            and not name.startswith("_")
-            and isinstance(getattr(openapi_client, name), type)
+            if name.endswith("Api") and not name.startswith("_") and isinstance(getattr(openapi_client, name), type)
         ]
 
         if not api_classes:
@@ -540,9 +525,7 @@ def _verify_package(output_dir: Path) -> bool:
         methods = [
             m
             for m in dir(cls)
-            if not m.startswith("_")
-            and not m.endswith("_with_http_info")
-            and callable(getattr(cls, m))
+            if not m.startswith("_") and not m.endswith("_with_http_info") and callable(getattr(cls, m))
         ]
         if methods:
             sig = inspect.signature(getattr(cls, methods[0]))

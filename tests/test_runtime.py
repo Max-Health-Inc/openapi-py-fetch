@@ -1,26 +1,23 @@
-# coding: utf-8
 """Tests for openapi_py_fetch runtime: Configuration, ApiClient, exceptions, ApiResponse."""
 
 from __future__ import annotations
 
-import json
 from unittest.mock import patch
 
 import httpx
 import pytest
 
 from openapi_py_fetch import (
+    ApiAttributeError,
     ApiClient,
     ApiException,
-    ApiResponse,
-    Configuration,
-    ApiAttributeError,
     ApiKeyError,
+    ApiResponse,
     ApiTypeError,
     ApiValueError,
+    Configuration,
     OpenApiException,
 )
-
 
 # =========================================================================
 # Configuration
@@ -167,7 +164,8 @@ class TestApiClientHTTP:
 
         with patch.object(httpx.Client, "request", return_value=mock_resp) as mock_req:
             result = client.call_api(
-                "/pet", "POST",
+                "/pet",
+                "POST",
                 body={"name": "Rex", "status": "available"},
             )
 
@@ -183,7 +181,8 @@ class TestApiClientHTTP:
 
         with patch.object(httpx.Client, "request", return_value=mock_resp) as mock_req:
             client.call_api(
-                "/pet/findByStatus", "GET",
+                "/pet/findByStatus",
+                "GET",
                 query_params={"status": "available"},
             )
 
@@ -262,9 +261,7 @@ class TestApiClientHTTP:
         cfg = Configuration(host="https://api.example.com")
         client = ApiClient(configuration=cfg)
 
-        with patch.object(
-            httpx.Client, "request", side_effect=httpx.ConnectError("refused")
-        ):
+        with patch.object(httpx.Client, "request", side_effect=httpx.ConnectError("refused")):
             with pytest.raises(ApiException) as exc_info:
                 client.call_api("/test", "GET")
 
@@ -275,9 +272,7 @@ class TestApiClientHTTP:
         cfg = Configuration(host="https://api.example.com")
         client = ApiClient(configuration=cfg)
 
-        with patch.object(
-            httpx.Client, "request", side_effect=httpx.ReadTimeout("timed out")
-        ):
+        with patch.object(httpx.Client, "request", side_effect=httpx.ReadTimeout("timed out")):
             with pytest.raises(ApiException) as exc_info:
                 client.call_api("/slow", "GET")
 
@@ -295,9 +290,7 @@ class TestApiClientHTTP:
         )
 
         with patch.object(httpx.Client, "request", return_value=mock_resp):
-            data, status, headers = client.call_api(
-                "/test", "GET", _return_http_info=True
-            )
+            data, status, headers = client.call_api("/test", "GET", _return_http_info=True)
 
         assert data == {"ok": True}
         assert status == 200
@@ -349,7 +342,8 @@ class TestApiClientHTTP:
 
         with patch.object(httpx.Client, "request", return_value=mock_resp) as mock_req:
             client.call_api(
-                "/data", "GET",
+                "/data",
+                "GET",
                 header_params={"X-Request-Id": "abc-123"},
             )
 
