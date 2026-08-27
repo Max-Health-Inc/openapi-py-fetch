@@ -8,30 +8,4 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
-
-    env:
-      UV_PYTHON: ${{ matrix.python-version }}
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: astral-sh/setup-uv@v10.0.1
-        with:
-          enable-cache: true
-
-      - name: Install dependencies
-        run: uv sync
-
-      - name: Lint
-        run: uv run ruff check .
-
-      - name: Format check
-        run: uv run ruff format --check .
-
-      - name: Test
-        run: uv run pytest -v
+    uses: ./.github/workflows/_test.yml

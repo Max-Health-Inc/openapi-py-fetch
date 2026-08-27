@@ -43,7 +43,7 @@ packages = ["openapi_py_fetch"]
 dev = [
     "pytest>=8.3.4",
     "pytest-cov>=6.0.0",
-    "ruff>=0.15,<0.16",
+    "ruff>=0.16,<0.17",
 ]
 
 [tool.uv]
