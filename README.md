@@ -17,6 +17,7 @@ Generates typed Python API classes backed by a shared httpx runtime.
 - **Thin generated output** — only API classes are generated; they `import from openapi_py_fetch`
 - **No runtime duplication** — unlike template-copy generators, the transport layer is maintained in one place
 - **Drop-in compatible** — generated `openapi_client` package structure matches openapi-generator output
+- **Typed models** — `$ref`, `allOf`, `oneOf`/`anyOf`, enums and nullable types resolve into TypedDicts, so responses and request bodies carry real types instead of `object`
 
 ## Installation
 
@@ -83,7 +84,43 @@ generated_openapi/
     │   ├── store_api.py
     │   └── user_api.py
     └── models/
-        └── __init__.py      # stub (schemas are inline)
+        └── __init__.py      # TypedDict per schema
+```
+
+## Typed Models
+
+Object schemas become TypedDicts, collected in one `models` module:
+
+```python
+class Pet(TypedDict):
+    """A pet."""
+
+    id: str
+    name: NotRequired[str]
+    status: NotRequired[Literal["available", "pending", "sold"]]
+```
+
+TypedDict is the shape that matches what the runtime returns: `ApiClient.call_api`
+hands back parsed JSON, so the annotation describes the dict a caller actually
+receives, with no deserialization step and no runtime cost. A type checker still
+catches a misspelled key or a wrong field type, and `get_type_hints()` resolves
+every annotation for callers that introspect the generated client.
+
+Resolved from the spec: `$ref` (including chains and self-references), `allOf`
+(merged, with required fields propagated), `oneOf` and `anyOf` (unions), enums
+(`Literal`), OpenAPI 3.1 nullable type arrays, `additionalProperties`, and
+`format: binary` (`bytes`). Inline object schemas are named after their `title`
+when they have one, otherwise after the operation they belong to.
+
+Schema resolution is public API, for tools that read a spec rather than generate
+from it:
+
+```python
+from openapi_py_fetch import SchemaRegistry
+
+registry = SchemaRegistry(spec)
+registry.python_type({"$ref": "#/components/schemas/Pet"})  # -> "Pet"
+registry.models  # -> {"Pet": {...}}
 ```
 
 ## Comparison with openapi-ts-fetch
@@ -94,7 +131,8 @@ generated_openapi/
 | HTTP transport | httpx | fetch |
 | Runtime | Shared pip package | Copied template file |
 | Generated output | Python classes | TypeScript classes |
-| Models | Inline (dict) | Full interfaces + JSON converters |
+| Models | TypedDicts | Interfaces + JSON converters |
+| Response types | Resolved from the spec | Resolved from the spec |
 
 ## License
 

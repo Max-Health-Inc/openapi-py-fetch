@@ -26,15 +26,32 @@ from .exceptions import (
     ApiValueError,
     OpenApiException,
 )
+from .schema_registry import SchemaRegistry, norm_type
 
-__all__ = [
-    "ApiClient",
-    "ApiResponse",
-    "Configuration",
+# The runtime names every generated client re-exports from this package.
+RUNTIME_EXPORTS = (
     "ApiAttributeError",
+    "ApiClient",
     "ApiException",
     "ApiKeyError",
+    "ApiResponse",
     "ApiTypeError",
     "ApiValueError",
+    "Configuration",
     "OpenApiException",
+)
+
+__all__ = [
+    "RUNTIME_EXPORTS",
+    "ApiAttributeError",
+    "ApiClient",
+    "ApiException",
+    "ApiKeyError",
+    "ApiResponse",
+    "ApiTypeError",
+    "ApiValueError",
+    "Configuration",
+    "OpenApiException",
+    "SchemaRegistry",
+    "norm_type",
 ]

@@ -19,58 +19,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import __all__ as _runtime_all
-
-# What every generated client re-exports from the runtime package.
-RUNTIME_EXPORTS = tuple(sorted(_runtime_all))
-
-# ---------------------------------------------------------------------------
-# Naming helpers
-# ---------------------------------------------------------------------------
-
-
-def snake_case(name: str) -> str:
-    """Convert a string to snake_case."""
-    name = name.replace("-", "_")
-    s1 = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
-    s2 = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1)
-    return s2.lower()
-
-
-def pascal_case(name: str) -> str:
-    """Convert a string to PascalCase."""
-    parts = re.split(r"[-_\s]+", name)
-    return "".join(p.capitalize() for p in parts if p)
-
-
-def sanitize_method_name(operation_id: str) -> str:
-    """Convert operationId to a valid Python method name."""
-    clean = re.sub(r"[^a-zA-Z0-9_\-]", "", operation_id)
-    result = snake_case(clean)
-    if result and result[0].isdigit():
-        result = "op_" + result
-    return result
-
-
-def sanitize_pep440_version(version: str) -> str:
-    """Coerce an arbitrary version string into PEP 440 format."""
-    m = re.match(r"(\d+(?:\.\d+)*)", version)
-    if not m:
-        return "0.0.0"
-    base = m.group(1)
-    rest = version[m.end() :]
-
-    pre = re.match(r"[\-.]?(alpha|beta|rc|dev)(.*)", rest, re.IGNORECASE)
-    if pre:
-        tag = pre.group(1).lower()
-        num_match = re.search(r"(\d+)", pre.group(2))
-        num = num_match.group(1) if num_match else "0"
-        mapping = {"alpha": "a", "beta": "b", "rc": "rc", "dev": ".dev"}
-        suffix = mapping.get(tag, "a")
-        return f"{base}{suffix}{num}"
-
-    return base
-
+from . import RUNTIME_EXPORTS
+from .models import generate_models_module
+from .naming import pascal_case, sanitize_method_name, sanitize_pep440_version, snake_case
+from .schema_registry import SchemaRegistry
 
 # ---------------------------------------------------------------------------
 # Schema -> Python type mapping
@@ -78,7 +30,13 @@ def sanitize_pep440_version(version: str) -> str:
 
 
 def map_schema_to_python_type(schema: dict | None) -> str:
-    """Map an OpenAPI schema to a Python type annotation string."""
+    """Map a schema to a Python type without spec context.
+
+    The fallback for anything unrecognized is ``str``. Use
+    :class:`~openapi_py_fetch.schema_registry.SchemaRegistry` instead whenever
+    the spec is available: it resolves $ref, enums, unions and allOf, which this
+    function cannot see.
+    """
     if schema is None:
         return "str"
 
@@ -153,6 +111,12 @@ def extract_operations(spec: dict) -> dict[str, list[dict]]:
 
             responses = operation.get("responses", {})
             success_response = responses.get("200", responses.get("201", {}))
+            response_schema = None
+            if isinstance(success_response, dict):
+                for ct, media in (success_response.get("content") or {}).items():
+                    if "json" in ct and isinstance(media, dict):
+                        response_schema = media.get("schema")
+                        break
 
             op_info = {
                 "operation_id": operation_id,
@@ -164,6 +128,7 @@ def extract_operations(spec: dict) -> dict[str, list[dict]]:
                 "body_schema": body_schema,
                 "body_required": request_body.get("required", False),
                 "response": success_response,
+                "response_schema": response_schema,
             }
 
             for tag in tags:
@@ -198,25 +163,19 @@ def _build_call_api_args(op: dict) -> str:
 
     if path_params:
         pairs = ", ".join(f'"{orig}": {py}' for orig, py in path_params)
-        lines.append(f"        _path_params = {{{pairs}}}")
+        lines.append(f"        _path_params: dict[str, Any] = {{{pairs}}}")
     else:
-        lines.append("        _path_params = {}")
+        lines.append("        _path_params: dict[str, Any] = {}")
 
-    if query_params:
-        lines.append("        _query_params = {}")
-        for orig, py in query_params:
-            lines.append(f"        if {py} is not None:")
-            lines.append(f'            _query_params["{orig}"] = {py}')
-    else:
-        lines.append("        _query_params = {}")
+    lines.append("        _query_params: dict[str, Any] = {}")
+    for orig, py in query_params:
+        lines.append(f"        if {py} is not None:")
+        lines.append(f'            _query_params["{orig}"] = {py}')
 
-    if header_params:
-        lines.append("        _header_params = {}")
-        for orig, py in header_params:
-            lines.append(f"        if {py} is not None:")
-            lines.append(f'            _header_params["{orig}"] = {py}')
-    else:
-        lines.append("        _header_params = {}")
+    lines.append("        _header_params: dict[str, str] = {}")
+    for orig, py in header_params:
+        lines.append(f"        if {py} is not None:")
+        lines.append(f'            _header_params["{orig}"] = {py}')
 
     has_body = op.get("body_schema") is not None
     if has_body:
@@ -227,11 +186,29 @@ def _build_call_api_args(op: dict) -> str:
     return "\n".join(lines)
 
 
-def generate_method(op: dict) -> str:
-    """Generate a Python method for an API operation."""
+def _optional(annotation: str) -> str:
+    """Make an annotation optional without stacking a second ``| None``."""
+    if annotation == "Any" or "None" in [part.strip() for part in annotation.split("|")]:
+        return annotation
+    return f"{annotation} | None"
+
+
+def generate_method(op: dict, registry: SchemaRegistry | None = None) -> str:
+    """Generate a Python method for an API operation.
+
+    With a registry, parameter and return annotations resolve $ref, enums and
+    unions against the spec. Without one, types come from
+    :func:`map_schema_to_python_type` and the return type is ``object``.
+    """
     method_name = sanitize_method_name(op["operation_id"])
     http_method = op["method"].upper()
     path = op["path"]
+    hint = pascal_case(sanitize_method_name(op["operation_id"]))
+
+    def type_of(schema: dict | None, name_hint: str) -> str:
+        if registry is None:
+            return map_schema_to_python_type(schema)
+        return registry.python_type(schema, name_hint)
 
     params: list[str] = ["self"]
     param_docs: list[str] = []
@@ -240,7 +217,7 @@ def generate_method(op: dict) -> str:
 
     for param in op["parameters"]:
         pname = snake_case(param["name"])
-        ptype = map_schema_to_python_type(param.get("schema"))
+        ptype = type_of(param.get("schema"), hint + pascal_case(pname))
         desc = param.get("description", f"{param['name']} parameter")
         if param.get("required", False):
             required_params.append((pname, ptype, desc))
@@ -248,7 +225,7 @@ def generate_method(op: dict) -> str:
             optional_params.append((pname, ptype, desc))
 
     if op.get("body_schema"):
-        body_type = map_schema_to_python_type(op["body_schema"])
+        body_type = type_of(op["body_schema"], hint + "Request")
         if op.get("body_required", False):
             required_params.append(("body", body_type, "Request body"))
         else:
@@ -259,13 +236,17 @@ def generate_method(op: dict) -> str:
         param_docs.append(f":param {pname}: {desc}")
 
     for pname, ptype, desc in optional_params:
-        params.append(f"{pname}: {ptype} | None = None")
+        params.append(f"{pname}: {_optional(ptype)} = None")
         param_docs.append(f":param {pname}: {desc} (optional)")
 
     params.append("**kwargs")
 
     summary = op.get("summary") or op.get("description") or f"{op['method']} {op['path']}"
     summary = summary.strip().split("\n")[0][:200]
+
+    return_type = "object"
+    if registry is not None:
+        return_type = registry.python_type(op.get("response_schema"), hint + "Response")
 
     docstring_lines = [summary, "", f"{http_method} {path}", ""]
     docstring_lines.extend(param_docs)
@@ -274,8 +255,9 @@ def generate_method(op: dict) -> str:
 
     param_str = ", ".join(params)
     call_api_args = _build_call_api_args(op)
+    http_info_type = "object" if return_type == "object" else f"tuple[{return_type}, int, dict[str, str]]"
 
-    return f'''    def {method_name}({param_str}) -> object:
+    return f'''    def {method_name}({param_str}) -> {return_type}:
         """{docstring}
         """
 {call_api_args}
@@ -287,7 +269,7 @@ def generate_method(op: dict) -> str:
             body=_body,
         )
 
-    def {method_name}_with_http_info({param_str}) -> object:
+    def {method_name}_with_http_info({param_str}) -> {http_info_type}:
         """{docstring}
 
         Returns tuple of (data, status_code, headers).
@@ -304,11 +286,17 @@ def generate_method(op: dict) -> str:
 '''
 
 
+def _references(code: str, name: str) -> bool:
+    """Whether generated code uses *name* as a whole identifier."""
+    return re.search(rf"\b{re.escape(name)}\b", code) is not None
+
+
 def generate_api_class(
     tag: str,
     operations: list[dict],
     api_title: str,
     api_description: str,
+    registry: SchemaRegistry | None = None,
 ) -> tuple[str, str, str]:
     """Generate a complete API class file for a tag.
 
@@ -319,9 +307,16 @@ def generate_api_class(
 
     methods_code = ""
     for op in operations:
-        methods_code += generate_method(op) + "\n"
+        methods_code += generate_method(op, registry) + "\n"
 
-    typing_import = "from typing import Any\n\n" if "Any" in methods_code else ""
+    typing_names = [name for name in ("Any", "Literal") if _references(methods_code, name)]
+    typing_import = f"from typing import {', '.join(typing_names)}\n\n" if typing_names else ""
+
+    model_import = ""
+    if registry is not None:
+        used = sorted(name for name in registry.models if _references(methods_code, name))
+        if used:
+            model_import = f"from openapi_client.models import {', '.join(used)}\n"
 
     content = f'''"""
     {api_title}
@@ -330,7 +325,7 @@ def generate_api_class(
     Generated by openapi-py-fetch.
 """
 
-{typing_import}from openapi_py_fetch import ApiClient
+{typing_import}{model_import}from openapi_py_fetch import ApiClient
 
 
 class {class_name}:
@@ -437,10 +432,12 @@ def generate_client_package(
     for tag, ops in sorted(operations_by_tag.items()):
         print(f"     {tag}: {len(ops)} operations")
 
-    # Generate API classes
+    # Generate API classes. The registry collects every model the signatures
+    # reference, so models must be written after the api modules.
+    registry = SchemaRegistry(spec)
     api_classes: list[tuple[str, str]] = []
     for tag, operations in sorted(operations_by_tag.items()):
-        class_name, module_name, content = generate_api_class(tag, operations, api_title, api_description)
+        class_name, module_name, content = generate_api_class(tag, operations, api_title, api_description, registry)
         api_classes.append((class_name, module_name))
         filepath = api_dir / f"{module_name}.py"
         filepath.write_text(content, encoding="utf-8")
@@ -451,11 +448,11 @@ def generate_client_package(
         api_init_lines.append(f"from openapi_client.api.{module_name} import {class_name}\n")
     (api_dir / "__init__.py").write_text("".join(api_init_lines), encoding="utf-8")
 
-    # Models __init__.py (stub — no model classes generated)
-    (models_dir / "__init__.py").write_text(
-        "# flake8: noqa\n\n# No model classes generated (schemas are inline)\n",
-        encoding="utf-8",
-    )
+    # Models — one module, so cross-references never form an import cycle
+    models_source, model_names = generate_models_module(registry, api_title)
+    (models_dir / "__init__.py").write_text(models_source, encoding="utf-8")
+    if model_names:
+        print(f"   [ok] Generated {len(model_names)} models")
 
     # Main __init__.py — re-exports runtime from openapi_py_fetch
     init_lines = [f'"""\n{api_title}\n\n{api_description}\n"""\n\n']

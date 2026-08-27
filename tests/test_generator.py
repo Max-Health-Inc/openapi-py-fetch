@@ -23,6 +23,7 @@ from openapi_py_fetch.generator import (
     sanitize_pep440_version,
     snake_case,
 )
+from openapi_py_fetch.schema_registry import SchemaRegistry
 
 FIXTURES = Path(__file__).parent.parent / "examples"
 
@@ -747,6 +748,7 @@ class TestGeneratedOutputLint:
         assert result.returncode == 0, result.stdout + result.stderr
 
     def test_typing_import_only_when_used(self, tmp_path):
+        """Literal is imported only by modules that actually emit one."""
         spec = {
             "openapi": "3.0.3",
             "info": {"title": "Tiny", "version": "1.0.0"},
@@ -755,10 +757,26 @@ class TestGeneratedOutputLint:
                     "get": {
                         "operationId": "ping",
                         "tags": ["health"],
+                        "parameters": [
+                            {"name": "mode", "in": "query", "schema": {"type": "string", "enum": ["fast", "slow"]}}
+                        ],
                         "responses": {"200": {"description": "OK"}},
                     }
-                }
+                },
+                "/pong": {
+                    "get": {
+                        "operationId": "pong",
+                        "tags": ["other"],
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                },
             },
         }
-        _, _, content = generate_api_class("health", extract_operations(spec)["health"], "Tiny", "")
-        assert "from typing import Any" not in content
+        operations = extract_operations(spec)
+        registry = SchemaRegistry(spec)
+
+        _, _, with_enum = generate_api_class("health", operations["health"], "Tiny", "", registry)
+        assert "Literal" in with_enum
+
+        _, _, without_enum = generate_api_class("other", operations["other"], "Tiny", "", registry)
+        assert "Literal" not in without_enum
