@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import inspect
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -704,3 +706,59 @@ class TestEdgeCases:
         ops = extract_operations(spec)
         assert ops["files"][0]["body_schema"] is not None
         assert "properties" in ops["files"][0]["body_schema"]
+
+
+# =========================================================================
+# Generated output quality
+# =========================================================================
+
+
+class TestGeneratedOutputLint:
+    """Generated packages land in projects that lint their sources."""
+
+    def test_generated_package_passes_ruff(self, tmp_path):
+        with open(FIXTURES / "petstore.json") as f:
+            spec = json.load(f)
+        generate_client_package(spec, tmp_path)
+
+        ruff = shutil.which("ruff")
+        if ruff is None:
+            pytest.skip("ruff not installed")
+
+        result = subprocess.run(
+            [
+                ruff,
+                "check",
+                "--no-cache",
+                "--isolated",
+                "--select",
+                "E,F,I,UP",
+                "--ignore",
+                "E501",
+                "--line-length",
+                "120",
+                "--target-version",
+                "py311",
+                str(tmp_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_typing_import_only_when_used(self, tmp_path):
+        spec = {
+            "openapi": "3.0.3",
+            "info": {"title": "Tiny", "version": "1.0.0"},
+            "paths": {
+                "/ping": {
+                    "get": {
+                        "operationId": "ping",
+                        "tags": ["health"],
+                        "responses": {"200": {"description": "OK"}},
+                    }
+                }
+            },
+        }
+        _, _, content = generate_api_class("health", extract_operations(spec)["health"], "Tiny", "")
+        assert "from typing import Any" not in content
