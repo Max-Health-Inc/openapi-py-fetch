@@ -21,32 +21,7 @@ concurrency:
 
 jobs:
   version:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.read.outputs.version }}
-      released: ${{ steps.read.outputs.released }}
-
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Read version and check whether it is already released
-        id: read
-        run: |
-          version="$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
-          if [ -z "$version" ]; then
-            echo "::error::Could not read version from pyproject.toml"
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
-            echo "released=true" >> "$GITHUB_OUTPUT"
-            echo "v$version is already tagged, nothing to publish." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "released=false" >> "$GITHUB_OUTPUT"
-            echo "v$version is new, publishing once the tests pass." >> "$GITHUB_STEP_SUMMARY"
-          fi
+    uses: max-network/.github/.github/workflows/pyproject-version.yml@main
 
   test:
     uses: ./.github/workflows/_test.yml
