@@ -1,13 +1,4 @@
-"""Model emission: every named object schema becomes a TypedDict.
-
-TypedDict is the honest shape here, because :meth:`ApiClient.call_api` returns
-parsed JSON. The annotation describes the dict a caller actually receives, with
-no deserialization layer and no runtime cost, and type checkers can still catch a
-misspelled key or a wrong field type.
-
-All models land in one module so that cross-references never form an import
-cycle and ``get_type_hints`` can always resolve a forward reference.
-"""
+"""Model emission: every named object schema becomes a TypedDict, all in one module to avoid import cycles."""
 
 from __future__ import annotations
 
@@ -28,12 +19,7 @@ from __future__ import annotations
 
 
 def generate_models_module(registry: SchemaRegistry, api_title: str) -> tuple[str, list[str]]:
-    """Render every registered model into one module.
-
-    Returns (module_source, model_names). Resolving one model's properties can
-    name further models, so this keeps rendering until the registry stops
-    growing.
-    """
+    """Render every registered model, looping until the registry stops growing; returns (source, names)."""
     rendered: dict[str, str] = {}
     while True:
         pending = sorted(name for name in registry.models if name not in rendered)

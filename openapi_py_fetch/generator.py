@@ -1,15 +1,4 @@
-"""
-Pure Python OpenAPI client generator.
-
-Generates thin Python API classes from an OpenAPI spec.  The generated classes
-import their runtime (ApiClient, Configuration, exceptions) from the
-``openapi_py_fetch`` package — no runtime code is duplicated into the output.
-
-The generated classes have proper:
-- inspect.signature() -> typed parameters
-- get_type_hints() -> type annotations
-- inspect.getdoc() -> docstrings from spec descriptions
-"""
+"""Generates thin, introspectable Python API classes from an OpenAPI spec; the runtime is imported, never copied."""
 
 from __future__ import annotations
 
@@ -24,19 +13,9 @@ from .models import generate_models_module
 from .naming import pascal_case, sanitize_method_name, sanitize_pep440_version, snake_case
 from .schema_registry import SchemaRegistry
 
-# ---------------------------------------------------------------------------
-# Schema -> Python type mapping
-# ---------------------------------------------------------------------------
-
 
 def map_schema_to_python_type(schema: dict | None) -> str:
-    """Map a schema to a Python type without spec context.
-
-    The fallback for anything unrecognized is ``str``. Use
-    :class:`~openapi_py_fetch.schema_registry.SchemaRegistry` instead whenever
-    the spec is available: it resolves $ref, enums, unions and allOf, which this
-    function cannot see.
-    """
+    """Map a schema to a Python type without spec context; prefer ``SchemaRegistry`` when the spec is available."""
     if schema is None:
         return "str"
 
@@ -62,11 +41,6 @@ def map_schema_to_python_type(schema: dict | None) -> str:
     if nullable:
         return f"{base} | None"
     return base
-
-
-# ---------------------------------------------------------------------------
-# Operation extraction
-# ---------------------------------------------------------------------------
 
 
 def extract_operations(spec: dict) -> dict[str, list[dict]]:
@@ -137,11 +111,6 @@ def extract_operations(spec: dict) -> dict[str, list[dict]]:
     return operations_by_tag
 
 
-# ---------------------------------------------------------------------------
-# Code generation — methods & classes
-# ---------------------------------------------------------------------------
-
-
 def _build_call_api_args(op: dict) -> str:
     """Build the call_api kwargs dict literal for a generated method body."""
     path_params = []
@@ -194,12 +163,7 @@ def _optional(annotation: str) -> str:
 
 
 def generate_method(op: dict, registry: SchemaRegistry | None = None) -> str:
-    """Generate a Python method for an API operation.
-
-    With a registry, parameter and return annotations resolve $ref, enums and
-    unions against the spec. Without one, types come from
-    :func:`map_schema_to_python_type` and the return type is ``object``.
-    """
+    """Generate a Python method for an API operation; without a registry the return type is ``object``."""
     method_name = sanitize_method_name(op["operation_id"])
     http_method = op["method"].upper()
     path = op["path"]
@@ -298,10 +262,7 @@ def generate_api_class(
     api_description: str,
     registry: SchemaRegistry | None = None,
 ) -> tuple[str, str, str]:
-    """Generate a complete API class file for a tag.
-
-    Returns (class_name, module_name, file_content).
-    """
+    """Generate a complete API class file for a tag; returns (class_name, module_name, file_content)."""
     class_name = pascal_case(tag) + "Api"
     module_name = snake_case(tag) + "_api"
 
@@ -345,11 +306,6 @@ class {class_name}:
     return class_name, module_name, content
 
 
-# ---------------------------------------------------------------------------
-# Package generation (public API)
-# ---------------------------------------------------------------------------
-
-
 def enrich_spec_tags(spec: dict) -> list[str]:
     """Auto-discover tags used in paths but not declared in spec.tags."""
     declared = {t.get("name", "") for t in spec.get("tags", [])}
@@ -382,24 +338,7 @@ def generate_client_package(
     enrich_tags_fn: Any | None = None,
     tags: list[str] | None = None,
 ) -> bool:
-    """Generate the complete openapi_client package from an OpenAPI spec.
-
-    The generated package only contains thin API classes.  The runtime
-    (ApiClient, Configuration, exceptions) is imported from the
-    ``openapi_py_fetch`` package at runtime.
-
-    Args:
-        spec: Parsed OpenAPI specification dictionary.
-        output_dir: Root of the generated_openapi directory
-                    (the ``openapi_client`` package will be created inside it).
-        enrich_tags_fn: Optional custom tag-enrichment function.  Defaults to
-                        the built-in :func:`enrich_spec_tags`.
-        tags: Optional list of tags to generate.  If ``None``, all tags are
-              generated.
-
-    Returns:
-        ``True`` if generation + verification succeeded.
-    """
+    """Generate ``openapi_client`` under *output_dir*, optionally limited to *tags*; True if it imports cleanly."""
     _enrich = enrich_tags_fn or enrich_spec_tags
 
     client_dir = output_dir / "openapi_client"
@@ -424,7 +363,6 @@ def generate_client_package(
 
     operations_by_tag = extract_operations(spec)
 
-    # Apply tag filter
     if tags:
         operations_by_tag = {tag: ops for tag, ops in operations_by_tag.items() if tag in tags}
 
@@ -432,8 +370,7 @@ def generate_client_package(
     for tag, ops in sorted(operations_by_tag.items()):
         print(f"     {tag}: {len(ops)} operations")
 
-    # Generate API classes. The registry collects every model the signatures
-    # reference, so models must be written after the api modules.
+    # API modules fill the registry, so models are written after them.
     registry = SchemaRegistry(spec)
     api_classes: list[tuple[str, str]] = []
     for tag, operations in sorted(operations_by_tag.items()):
@@ -442,19 +379,16 @@ def generate_client_package(
         filepath = api_dir / f"{module_name}.py"
         filepath.write_text(content, encoding="utf-8")
 
-    # API __init__.py
     api_init_lines = ["# flake8: noqa\n", "# import apis into api package\n"]
     for class_name, module_name in sorted(api_classes):
         api_init_lines.append(f"from openapi_client.api.{module_name} import {class_name}\n")
     (api_dir / "__init__.py").write_text("".join(api_init_lines), encoding="utf-8")
 
-    # Models — one module, so cross-references never form an import cycle
     models_source, model_names = generate_models_module(registry, api_title)
     (models_dir / "__init__.py").write_text(models_source, encoding="utf-8")
     if model_names:
         print(f"   [ok] Generated {len(model_names)} models")
 
-    # Main __init__.py — re-exports runtime from openapi_py_fetch
     init_lines = [f'"""\n{api_title}\n\n{api_description}\n"""\n\n']
     for class_name, module_name in sorted(api_classes):
         init_lines.append(f"from openapi_client.api.{module_name} import {class_name}  # noqa: F401\n")
@@ -464,7 +398,6 @@ def generate_client_package(
     init_lines.append(f'__version__ = "{api_version}"\n')
     (client_dir / "__init__.py").write_text("".join(init_lines), encoding="utf-8")
 
-    # pyproject.toml — depends on openapi-py-fetch, NOT httpx directly
     pyproject = f'''[build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
@@ -491,7 +424,7 @@ def _verify_package(output_dir: Path) -> bool:
     if str(output_dir) not in sys.path:
         sys.path.insert(0, str(output_dir))
 
-    # Force reimport in case of prior stale imports
+    # Drop stale imports from a previous generation
     for mod_name in list(sys.modules.keys()):
         if mod_name.startswith("openapi_client"):
             del sys.modules[mod_name]
